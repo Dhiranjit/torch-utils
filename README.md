@@ -13,6 +13,7 @@ The goal is to avoid rewriting boilerplate code across projects, allowing for fa
 
 ## File Structure
 
+```
 torch-utils/
 │
 ├── setup.py
@@ -24,6 +25,7 @@ torch-utils/
 ├── engine.py
 ├── models.py
 └── utils.py
+```
 
 ---
 
