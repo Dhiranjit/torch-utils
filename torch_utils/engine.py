@@ -5,7 +5,6 @@ import json
 from tqdm.auto import tqdm
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
-from datetime import datetime
 
 # ANSI COLORS
 BLUE = "\033[94m"
@@ -117,8 +116,7 @@ def train(model: torch.nn.Module,
     best_val_loss = float('inf')
     best_val_acc = 0.0
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_name = f"{model_name.replace('.pth', '')}_{timestamp}"
+    run_name = model_name
 
     # --- TensorBoard ---
     log_dir = f"runs/{run_name}"
