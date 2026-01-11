@@ -13,7 +13,7 @@ from matplotlib.patches import Rectangle
 from typing import List, Tuple, Dict, Optional
 from collections import defaultdict
 import numpy as np
-
+from torchinfo import summary
 
 # ANSI COLORS
 BLUE = "\033[94m"
@@ -21,6 +21,19 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 CYAN = "\033[96m"
 RESET = "\033[0m"
+
+
+def get_model_summary(model:torch.nn.Module):
+    """
+    Returns a summary of the model architecture.
+    """
+    return summary(model,
+        input_size=(32, 3, 224, 224),
+        col_names=["input_size", "output_size", "num_params", "trainable"],
+        col_width=20,
+        row_settings=["var_names"])
+
+
 
 
 def accuracy_fn(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
