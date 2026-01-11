@@ -4,7 +4,8 @@ import torch
 import json
 from tqdm.auto import tqdm
 from pathlib import Path
-
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
 
 # ANSI COLORS
 BLUE = "\033[94m"
@@ -83,6 +84,11 @@ def test_step(model: torch.nn.Module,
     return val_loss / len(dataloader), val_acc / len(dataloader)
 
 
+from pathlib import Path
+from datetime import datetime
+import torch
+from torch.utils.tensorboard import SummaryWriter
+
 def train(model: torch.nn.Module,
           train_dataloader: torch.utils.data.DataLoader,
           val_dataloader: torch.utils.data.DataLoader,
@@ -91,21 +97,39 @@ def train(model: torch.nn.Module,
           accuracy_fn,
           device: str,
           epochs: int,
+          model_name: str,
           scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
-          model_name: str = "best_model.pth") -> dict:
-    
-    
-    model_save_path = Path("models") / model_name
-    result_save_path = Path("results") / model_name
-    Path(model_save_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(result_save_path).parent.mkdir(parents=True, exist_ok=True)
+          ) -> dict:
+
+    # --- Directories ---
+    exp_dir = Path("models/experiments")
+    best_dir = Path("models/best")
+    interrupted_dir = Path("models/interrupted")
+    results_dir = Path("results")
+
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    best_dir.mkdir(parents=True, exist_ok=True)
+    interrupted_dir.mkdir(parents=True, exist_ok=True)
+    results_dir.mkdir(parents=True, exist_ok=True)
+
     results = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
-    best_val_loss = float('inf') 
+    best_val_loss = float('inf')
+    best_val_acc = 0.0
+
+    # --- TensorBoard ---
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_name = f"{model_name.replace('.pth', '')}_{timestamp}"
+    log_dir = f"runs/{run_name}"
+    writer = SummaryWriter(log_dir=log_dir)
+
+    # Add model graph
+    dummy_input = next(iter(train_dataloader))[0].to(device)
+    writer.add_graph(model, dummy_input)
 
     try:
         for epoch in range(epochs):
-            
-            # --- Modular Steps ---
+
+            # --- Training ---
             train_loss, train_acc = train_step(
                 model=model, 
                 dataloader=train_dataloader, 
@@ -116,7 +140,8 @@ def train(model: torch.nn.Module,
                 epoch_index=epoch,
                 total_epochs=epochs
             )
-            
+
+            # --- Validation ---
             val_loss, val_acc = test_step(
                 model=model, 
                 dataloader=val_dataloader, 
@@ -125,27 +150,32 @@ def train(model: torch.nn.Module,
                 device=device
             )
 
-            # --- Logging ---
+            # --- Store results ---
             results["train_loss"].append(train_loss)
             results["train_acc"].append(train_acc)
             results["val_loss"].append(val_loss)
             results["val_acc"].append(val_acc)
+
+            # --- TensorBoard logging ---
+            writer.add_scalars("Loss", {"Train": train_loss, "Validation": val_loss}, epoch)
+            writer.add_scalars("Accuracy", {"Train": train_acc, "Validation": val_acc}, epoch)
 
             print(f"{CYAN}Train Loss:{RESET} {YELLOW}{train_loss:.4f}{RESET} | "
                   f"{CYAN}Val Loss:{RESET} {YELLOW}{val_loss:.4f}{RESET} | "
                   f"{CYAN}Train Acc:{RESET} {GREEN}{train_acc:.2f}%{RESET} | "
                   f"{CYAN}Val Acc:{RESET} {GREEN}{val_acc:.2f}%{RESET}")
 
-            # --- Checkpointing ---
+            # --- Best Model Checkpointing ---
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                # Save Model
-                torch.save(model.state_dict(), model_save_path)
-                # Save Results (JSON)
-                save_results(results, result_save_path)
-                print(f"{GREEN}>>> Improved validation loss. Saved model to {model_save_path}{RESET}")
-            
-            print() 
+                best_val_acc = val_acc
+
+                best_path = best_dir / model_name
+                torch.save(model.state_dict(), best_path)
+
+                print(f"{GREEN}>>> Improved validation loss. Best model updated at {best_path}{RESET}")
+
+            print()
 
             # --- Scheduler ---
             if scheduler:
@@ -154,17 +184,51 @@ def train(model: torch.nn.Module,
                 else:
                     scheduler.step()
 
+        # --- Save Final Experiment ---
+        exp_path = exp_dir / f"{run_name}.pth"
+        results_path = results_dir / f"{run_name}.json"
+        
+        torch.save(model.state_dict(), exp_path)
+        save_results(results, results_path)
+        
+        print(f"{GREEN}Training complete!{RESET}")
+        print(f"{GREEN}Final model saved to {exp_path}{RESET}")
+        print(f"{GREEN}Results saved to {results_path}{RESET}")
+        print()
+
+        # --- HParams Logging ---
+        hparams_dict = {
+            "lr": optimizer.param_groups[0]['lr'],
+            "batch_size": train_dataloader.batch_size,
+            "epochs": epochs,
+            "optimizer": type(optimizer).__name__
+        }
+
+        metrics_dict = {
+            "hparam/best_val_loss": best_val_loss,
+            "hparam/best_val_acc": best_val_acc,
+            "hparam/final_train_loss": results["train_loss"][-1],
+            "hparam/final_val_loss": results["val_loss"][-1],
+            "hparam/final_val_acc": results["val_acc"][-1]
+        }
+
+        writer.add_hparams(hparam_dict=hparams_dict, metric_dict=metrics_dict)
+        writer.close()
+
     except KeyboardInterrupt:
         print(f"\n{YELLOW}Training interrupted by user!{RESET}")
         print(f"{YELLOW}Saving current state...{RESET}")
+
+        interrupted_path = interrupted_dir / f"{run_name}.pth"
+        interrupted_results_path = results_dir / f"{run_name}_interrupted.json"
+
+        torch.save(model.state_dict(), interrupted_path)
+        save_results(results, interrupted_results_path)
+
+        print(f"{GREEN}Safe exit performed. Checkpoint saved to {interrupted_path}{RESET}")
+        print(f"{GREEN}Results saved to {interrupted_results_path}{RESET}")
         
-        Path("models/interrupted_model.pth").parent.mkdir(parents=True, exist_ok=True)
-        Path("results/interrupted_model.pth").parent.mkdir(parents=True, exist_ok=True)
-        # Save interrupted work
-        torch.save(model.state_dict(), "models/interrupted_model.pth")
-        save_results(results, "results/interrupted_model.pth")
-        
-        print(f"{GREEN}Safe exit performed. Returning logs.{RESET}")
+        writer.close()
 
     return results
 
