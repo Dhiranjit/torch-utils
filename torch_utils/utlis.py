@@ -11,6 +11,14 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from matplotlib.patches import Rectangle
 from typing import List, Tuple, Dict
+from collections import defaultdict
+
+# ANSI COLORS
+BLUE = "\033[94m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+CYAN = "\033[96m"
+RESET = "\033[0m"
 
 
 def accuracy_fn(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
@@ -257,5 +265,134 @@ def predict_single_image(image_path: str,
                  f"Conf: {confidence:.2%}")
 
     plt.title(info_text, color=title_color, fontsize=12, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+
+
+    ### Directory walking utility functions (walk_through_dir) ###
+
+def build_dir_stats(root: Path):
+    """
+    Single-pass recursive scan.
+    Returns:
+        file_count[path] = number of files under it (recursive)
+        dir_size[path]   = total size of files under it (recursive, bytes)
+        files_in_dir[path] = direct file list (non-recursive)
+    """
+    file_count = defaultdict(int)
+    dir_size = defaultdict(int)
+    files_in_dir = defaultdict(list)
+
+    for path in root.rglob("*"):
+        if path.is_file():
+            size = path.stat().st_size
+            parent = path.parent
+
+            # Store direct child files (non-recursive)
+            files_in_dir[parent].append(path.name)
+
+            # Add file count + size to all parents
+            while True:
+                file_count[parent] += 1
+                dir_size[parent] += size
+
+                if parent == root:
+                    break
+                parent = parent.parent
+
+    return file_count, dir_size, files_in_dir
+
+
+def print_tree(root: Path, file_count, dir_size, files_in_dir, prefix=""):
+    entries = sorted(root.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+    dirs = [p for p in entries if p.is_dir()]
+
+    for i, d in enumerate(dirs):
+        connector = "├── " if i < len(dirs)-1 else "└── "
+        size_mb = dir_size[d] / (1024 * 1024)
+
+        print(
+            prefix + connector +
+            f"{BLUE}{d.name}/{RESET} "
+            f"(files: {GREEN}{file_count[d]}{RESET}, "
+            f"size: {YELLOW}{size_mb:.2f} MB{RESET})"
+        )
+
+        # If folder has < 15 files → show files (direct children only)
+        if file_count[d] < 15 and files_in_dir[d]:
+            for file_name in files_in_dir[d]:
+                print(prefix + ("│   " if i < len(dirs)-1 else "    ") +
+                      f"{CYAN}- {file_name}{RESET}")
+
+        new_prefix = prefix + ("│   " if i < len(dirs)-1 else "    ")
+        print_tree(d, file_count, dir_size, files_in_dir, new_prefix)
+
+
+def walk_through_dir(path: str | Path):
+    """
+    Walks through a directory and prints its contents in a tree structure.
+    Args:
+        path (str | Path): The root directory path to walk through.
+    """
+    root = Path(path)
+    print("Scanning directory tree (single pass)...")
+    file_count, dir_size, files_in_dir = build_dir_stats(root)
+
+    root_size_mb = dir_size[root] / (1024 * 1024)
+
+    print(
+        f"{BLUE}{root}{RESET} "
+        f"(files: {GREEN}{file_count[root]}{RESET}, "
+        f"size: {YELLOW}{root_size_mb:.2f} MB{RESET})"
+    )
+
+    print_tree(root, file_count, dir_size, files_in_dir)
+
+
+def display_random_image(dataset: torch.utils.data.Dataset,
+                     classes: List[str] = None, # type: ignore
+                     n: int = 10,
+                     display_shape: bool = True):  # type: ignore
+
+    """
+    Displays a grid of n random images from a PyTorch dataset.
+    Args:
+        dataset: A PyTorch dataset (e.g., torchvision.datasets.ImageFolder).
+        classes: Optional list of class names corresponding to dataset labels.
+        n: Number of random images to display (default is 10).
+        display_shape: Whether to display image shape in the title (default is True).
+    """
+
+    # Set the seed
+    rng = random.Random()
+
+    # Get random sample indices
+    random_sample_idx = rng.sample(range(len(dataset)), k=n) # type: ignore
+
+    # Calculate grid dimensions
+    cols = min(5, n)  # Max 5 columns
+    rows = (n + cols - 1) // cols  # Ceiling division
+    
+    # Setup plot with dynamic grid
+    plt.figure(figsize=(cols * 3, rows * 3))
+
+    # Loop through random indices and plot them with matplotlib
+    for i, targ_sample in enumerate(random_sample_idx):
+        targ_image, targ_label = dataset[targ_sample]
+
+        # Convert from CHW to HWC format
+        targ_image = targ_image.permute(1, 2, 0)
+
+        plt.subplot(rows, cols, i + 1)
+        plt.imshow(targ_image)
+        plt.axis("off")
+
+        # Set title
+        if classes:
+            title = f"Class: {classes[targ_label]}"
+            if display_shape:
+                title = title + f"\nshape: {targ_image.shape}"
+            plt.title(title)
+    
     plt.tight_layout()
     plt.show()
