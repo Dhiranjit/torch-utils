@@ -14,7 +14,7 @@ CYAN = "\033[96m"
 RESET = "\033[0m"
 
 
-def save_results(results: dict, save_path: str):
+def save_results(results: dict, save_path: str | Path):
     """Helper to save results dict to a JSON file."""
     # Change extension from .pth to .json
     json_path = Path(save_path).with_suffix(".json")
@@ -92,11 +92,13 @@ def train(model: torch.nn.Module,
           device: str,
           epochs: int,
           scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
-          save_path: str = "models/best_model.pth") -> dict:
+          model_name: str = "best_model.pth") -> dict:
     
     
-    
-    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    model_save_path = Path("models") / model_name
+    result_save_path = Path("results") / model_name
+    Path(model_save_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(result_save_path).parent.mkdir(parents=True, exist_ok=True)
     results = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
     best_val_loss = float('inf') 
 
@@ -138,10 +140,10 @@ def train(model: torch.nn.Module,
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 # Save Model
-                torch.save(model.state_dict(), save_path)
+                torch.save(model.state_dict(), model_save_path)
                 # Save Results (JSON)
-                save_results(results, save_path)
-                print(f"{GREEN}>>> Improved validation loss. Saved model to {save_path}{RESET}")
+                save_results(results, result_save_path)
+                print(f"{GREEN}>>> Improved validation loss. Saved model to {model_save_path}{RESET}")
             
             print() 
 

@@ -10,8 +10,10 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
 from matplotlib.patches import Rectangle
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from collections import defaultdict
+import numpy as np
+
 
 # ANSI COLORS
 BLUE = "\033[94m"
@@ -38,8 +40,14 @@ def accuracy_fn(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
 
 def save_model(model: torch.nn.Module,
                target_dir: str,
-               model_name: str):
-    """Saves a PyTorch model to a target directory."""
+               model_name: str) -> None:
+    """Saves a PyTorch model to a target directory.
+    
+    Args:
+        model (torch.nn.Module): The PyTorch model to save.
+        target_dir (str): Directory path where the model will be saved.
+        model_name (str): Name of the model file (e.g., 'model.pth').
+    """
 
     # Create target directory if it doesn't exist
     target_dir_path = Path(target_dir)
@@ -56,14 +64,22 @@ def save_model(model: torch.nn.Module,
 
 
 def load_model(model: torch.nn.Module,
-                model_path: str,
-                num_classes: int,
-                device: str):
-    """Loads a PyTorch model from a target path."""
-     
-    model_path = Path(model_path) # type: ignore
+                model_path: str | Path,
+                device: str) -> torch.nn.Module:
+    """Loads a PyTorch model from a target path.
     
-    if model_path.is_file(): #type: ignore
+    Args:
+        model (torch.nn.Module): The model architecture to load weights into.
+        model_path (str | Path): Path to the saved model state dict.
+        device (str): Device to load the model on ('cuda' or 'cpu').
+        
+    Returns:
+        torch.nn.Module: The model with loaded weights.
+    """
+     
+    model_path = Path(model_path)
+    
+    if model_path.is_file():
           print(f"Loading model from: {model_path}")
           model.load_state_dict(torch.load(f=model_path,
                                           map_location=device))
@@ -76,19 +92,14 @@ def load_model(model: torch.nn.Module,
     return model
 
 
-import matplotlib.pyplot as plt
-from typing import Dict, List, Optional
-
-
-
-def plot_loss_curves(results: Dict[str, List[float]], save_path: Optional[str] = None):
+def plot_loss_curves(results: Dict[str, List[float]], save_path: Optional[str] = None) -> None:
     """
     Plots training curves of a model.
     
     Args:
-        results: Dictionary containing list of values, e.g.:
+        results (Dict[str, List[float]]): Dictionary containing list of values, e.g.:
             {'train_loss': [...], 'train_acc': [...], 'val_loss': [...], 'val_acc': [...]}
-        save_path: Optional string path to save the figure (e.g., 'plots/results.png')
+        save_path (Optional[str]): Optional string path to save the figure (e.g., 'plots/results.png').
     """
     
     # Get the loss values of the results dictionary (training and validation)
@@ -131,12 +142,12 @@ def plot_loss_curves(results: Dict[str, List[float]], save_path: Optional[str] =
     plt.show()
 
 
-def make_predictions_grid(test_dir : str,
+def make_predictions_grid(test_dir : str | Path,
                            model: torch.nn.Module, 
                            transform: transforms.Compose, 
                            class_names: List[str], 
                            device: str, 
-                           n_images=9):
+                           n_images: int = 9) -> None:
     """
     Visualizes random model predictions on a grid of images from the test directory.
     
@@ -144,12 +155,13 @@ def make_predictions_grid(test_dir : str,
     a grid showing the image, predicted label, confidence score, and true label.
     Incorrect predictions are highlighted with a red overlay.
 
-    :param test_dir: Path to the root test directory containing class subfolders.
-    :param model: The trained PyTorch model in evaluation mode.
-    :param transform: The torchvision transform pipeline (must match training input).
-    :param class_names: List of class strings where index matches model output.
-    :param device: The torch device to run inference on (e.g., 'cuda' or 'cpu').
-    :param n_images: Number of images to randomly sample and display (default: 9).
+    Args:
+        test_dir (str | Path): Path to the root test directory containing class subfolders.
+        model (torch.nn.Module): The trained PyTorch model in evaluation mode.
+        transform (transforms.Compose): The torchvision transform pipeline (must match training input).
+        class_names (List[str]): List of class strings where index matches model output.
+        device (str): The torch device to run inference on (e.g., 'cuda' or 'cpu').
+        n_images (int): Number of images to randomly sample and display (default: 9).
     """
     image_path = Path(test_dir)
     
@@ -230,7 +242,19 @@ def predict_single_image(image_path: str,
                          model: torch.nn.Module, 
                          transform: transforms.Compose, 
                          class_names: List[str], 
-                         device: str):
+                         device: str) -> None:
+    """Predicts and displays the class of a single image.
+    
+    Args:
+        image_path (str): Path to the image file.
+        model (torch.nn.Module): The trained PyTorch model in evaluation mode.
+        transform (transforms.Compose): The torchvision transform pipeline.
+        class_names (List[str]): List of class strings where index matches model output.
+        device (str): The torch device to run inference on (e.g., 'cuda' or 'cpu').
+        
+    Raises:
+        FileNotFoundError: If the image path does not exist.
+    """
     img_path = Path(image_path)
     if not img_path.exists():
         raise FileNotFoundError(f"Image not found at {img_path}")
@@ -269,15 +293,20 @@ def predict_single_image(image_path: str,
     plt.show()
 
 
-    ### Directory walking utility functions (walk_through_dir) ###
 
-def build_dir_stats(root: Path):
-    """
-    Single-pass recursive scan.
+### Directory walking utility functions
+
+def build_dir_stats(root: Path) -> Tuple[defaultdict, defaultdict, defaultdict]:
+    """Performs a single-pass recursive scan of a directory structure.
+    
+    Args:
+        root (Path): The root directory to scan.
+        
     Returns:
-        file_count[path] = number of files under it (recursive)
-        dir_size[path]   = total size of files under it (recursive, bytes)
-        files_in_dir[path] = direct file list (non-recursive)
+        Tuple[defaultdict, defaultdict, defaultdict]: A tuple containing:
+            - file_count: Number of files under each path (recursive).
+            - dir_size: Total size of files under each path (recursive, in bytes).
+            - files_in_dir: Direct file list for each directory (non-recursive).
     """
     file_count = defaultdict(int)
     dir_size = defaultdict(int)
@@ -303,7 +332,17 @@ def build_dir_stats(root: Path):
     return file_count, dir_size, files_in_dir
 
 
-def print_tree(root: Path, file_count, dir_size, files_in_dir, prefix=""):
+def print_tree(root: Path, file_count: defaultdict, dir_size: defaultdict, 
+               files_in_dir: defaultdict, prefix: str = "") -> None:
+    """Recursively prints a directory tree with file counts and sizes.
+    
+    Args:
+        root (Path): Current directory to print.
+        file_count (defaultdict): Dictionary mapping paths to file counts.
+        dir_size (defaultdict): Dictionary mapping paths to total sizes in bytes.
+        files_in_dir (defaultdict): Dictionary mapping paths to direct child files.
+        prefix (str): String prefix for tree formatting (default: "").
+    """
     entries = sorted(root.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
     dirs = [p for p in entries if p.is_dir()]
 
@@ -328,9 +367,9 @@ def print_tree(root: Path, file_count, dir_size, files_in_dir, prefix=""):
         print_tree(d, file_count, dir_size, files_in_dir, new_prefix)
 
 
-def walk_through_dir(path: str | Path):
-    """
-    Walks through a directory and prints its contents in a tree structure.
+def walk_through_dir(path: str | Path) -> None:
+    """Walks through a directory and prints its contents in a tree structure.
+    
     Args:
         path (str | Path): The root directory path to walk through.
     """
@@ -350,17 +389,16 @@ def walk_through_dir(path: str | Path):
 
 
 def display_random_image(dataset: torch.utils.data.Dataset,
-                     classes: List[str] = None, # type: ignore
+                     classes: Optional[List[str]] = None,
                      n: int = 10,
-                     display_shape: bool = True):  # type: ignore
-
-    """
-    Displays a grid of n random images from a PyTorch dataset.
+                     display_shape: bool = True) -> None:
+    """Displays a grid of n random images from a PyTorch dataset.
+    
     Args:
-        dataset: A PyTorch dataset (e.g., torchvision.datasets.ImageFolder).
-        classes: Optional list of class names corresponding to dataset labels.
-        n: Number of random images to display (default is 10).
-        display_shape: Whether to display image shape in the title (default is True).
+        dataset (torch.utils.data.Dataset): A PyTorch dataset (e.g., torchvision.datasets.ImageFolder).
+        classes (Optional[List[str]]): Optional list of class names corresponding to dataset labels.
+        n (int): Number of random images to display (default is 10).
+        display_shape (bool): Whether to display image shape in the title (default is True).
     """
 
     # Set the seed
@@ -396,3 +434,16 @@ def display_random_image(dataset: torch.utils.data.Dataset,
     
     plt.tight_layout()
     plt.show()
+
+
+def set_seed(seed: int) -> None:
+    """Sets random seed for reproducibility across multiple libraries.
+    
+    Args:
+        seed (int): The random seed value to set for random, numpy, and PyTorch.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)

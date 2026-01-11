@@ -3,17 +3,18 @@ Contains functionality for creating PyTorch datasets and dataloaders
 from a standard image classification dataset structure.
 """
 import torch
+from pathlib import Path
 from torch.utils.data import Subset, DataLoader
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader, random_split
 
 
 def create_dataloader(
-    train_dir: str,
+    train_dir: str | Path,
     train_transform: transforms.Compose,
     test_transform: transforms.Compose,
-    test_dir: str | None = None, # Optional
-    val_dir: str | None = None,  # Optional
+    test_dir: str | Path | None = None, # Optional
+    val_dir: str | Path | None = None,  # Optional
     batch_size: int = 32,
     num_workers: int = 0,
     val_split: float = 0.2,
