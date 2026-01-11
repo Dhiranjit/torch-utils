@@ -89,6 +89,7 @@ from datetime import datetime
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+
 def train(model: torch.nn.Module,
           train_dataloader: torch.utils.data.DataLoader,
           val_dataloader: torch.utils.data.DataLoader,
@@ -103,7 +104,7 @@ def train(model: torch.nn.Module,
 
     # --- Directories ---
     exp_dir = Path("models/experiments")
-    best_dir = Path("models/best")
+    best_dir = Path("models/best_runs")
     interrupted_dir = Path("models/interrupted")
     results_dir = Path("results")
 
@@ -116,9 +117,10 @@ def train(model: torch.nn.Module,
     best_val_loss = float('inf')
     best_val_acc = 0.0
 
-    # --- TensorBoard ---
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_name = f"{model_name.replace('.pth', '')}_{timestamp}"
+
+    # --- TensorBoard ---
     log_dir = f"runs/{run_name}"
     writer = SummaryWriter(log_dir=log_dir)
 
@@ -170,7 +172,7 @@ def train(model: torch.nn.Module,
                 best_val_loss = val_loss
                 best_val_acc = val_acc
 
-                best_path = best_dir / model_name
+                best_path = best_dir / f"{run_name}.pth"
                 torch.save(model.state_dict(), best_path)
 
                 print(f"{GREEN}>>> Improved validation loss. Best model updated at {best_path}{RESET}")
