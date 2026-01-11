@@ -75,19 +75,21 @@ def load_model(model: torch.nn.Module,
         
     Returns:
         torch.nn.Module: The model with loaded weights.
+        
+    Raises:
+        FileNotFoundError: If the model path does not exist.
     """
      
     model_path = Path(model_path)
     
-    if model_path.is_file():
-          print(f"Loading model from: {model_path}")
-          model.load_state_dict(torch.load(f=model_path,
-                                          map_location=device))
-          model.to(device)
-          print("Model loaded successfully!")
-          
-    else:
-        print(f"Model path: {model_path} does not exist!")
+    if not model_path.is_file():
+        raise FileNotFoundError(f"Model path does not exist: {model_path}")
+    
+    print(f"Loading model from: {model_path}")
+    model.load_state_dict(torch.load(f=model_path,
+                                    map_location=device))
+    model.to(device)
+    print("Model loaded successfully!")
 
     return model
 

@@ -159,9 +159,10 @@ def train(model: torch.nn.Module,
         print(f"{YELLOW}Saving current state...{RESET}")
         
         Path("models/interrupted_model.pth").parent.mkdir(parents=True, exist_ok=True)
+        Path("results/interrupted_model.pth").parent.mkdir(parents=True, exist_ok=True)
         # Save interrupted work
         torch.save(model.state_dict(), "models/interrupted_model.pth")
-        save_results(results, "models/interrupted_model.pth")
+        save_results(results, "results/interrupted_model.pth")
         
         print(f"{GREEN}Safe exit performed. Returning logs.{RESET}")
 

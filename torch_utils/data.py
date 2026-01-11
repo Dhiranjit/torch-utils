@@ -6,7 +6,7 @@ import torch
 from pathlib import Path
 from torch.utils.data import Subset, DataLoader
 from torchvision import transforms, datasets
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 
 
 def create_dataloader(
